@@ -47,44 +47,51 @@ def check_once():
         today_str = datetime.today().strftime('%Y-%m-%d')
         time_str = datetime.now().strftime('%H:%M')
         
-        # 讀取這 24 小時生命週期內上一次記錄的車隊清單
-        last_buses = []
+        # 🎯 改動 1：改用「換行讀取」完整的行蹤識別碼，避免新行蹤被吃掉
+        last_records = []
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                last_buses = [b.strip() for b in f.read().split(',') if b.strip()]
+                last_records = [line.strip() for line in f.readlines() if line.strip()]
         
-        is_initial = (len(last_buses) == 0) # 00:00 剛啟動時為空，視為初始化
-        current_today_buses = []            # 當前網頁上所有出現的車
+        is_initial = (len(last_records) == 0) # 00:00 剛啟動或檔案不存在時為初始化
+        current_today_records = []          # 儲存當前網頁上所有合法的行蹤
         new_buses_to_notify = []            # 存放本次需要發通知的行蹤
         has_bold_bus = False                # 標記本次通知內是否包含特見
         
         if today_str in html_text:
-            # 安全切片：防止被備註截斷
             after_today = html_text.split(today_str)[1]
             
             for line in after_today.split('\n'):
                 line = line.strip()
                 if not line:
                     continue
+                
+                # 🎯 改動 2：精準判定！只有整行「剛好只有日期」才視為昨天的分隔線
+                # 這樣 580 常見的 DEAD (2026-07-03 12:31:12) 這種長備註行就不會導致程式腰斬！
                 if len(line) == 10 and line.count('-') == 2 and line != today_str:
                     break
                 
                 tokens = line.split()
                 if len(tokens) >= 3:
-                    # 拿回 tokens[2]，直接作為網頁上顯示的路線
                     fleet_no, plates_no, route_no = tokens[0], tokens[1], tokens[2]
                     
-                    if fleet_no.replace('.', '', 1).isdigit() or fleet_no.isdigit():
-                        if fleet_no not in current_today_buses:
-                            current_today_buses.append(fleet_no)
+                    # 兼容所有車隊編號格式
+                    if fleet_no.replace('.', '', 1).isdigit() or fleet_no.isalnum():
                         
+                        # 🎯 改動 3：建立唯一的「車牌_路線」識別碼
+                        # 這樣一來，即使同一台車換了新路線或進了 DEAD 廠，都能當作新動態抓出來！
+                        record_key = f"{fleet_no}__{route_no}"
+                        
+                        if record_key not in current_today_records:
+                            current_today_records.append(record_key)
+                        
+                        # 保留你原本判斷 580 特見號碼的函式
                         is_special = check_bus_number(fleet_no)
                         
                         # 判定：特見加粗，普通車正常
                         if is_special:
                             formatted_output = f"**{fleet_no} ({plates_no}) @ {route_no} ({time_str})**"
                         else:
-                            formatted_output = f"{fleet_no} ({plates_no}) @ 580 ({time_str})" # 修正：統一顯示 @ 580 
                             formatted_output = f"{fleet_no} ({plates_no}) @ {route_no} ({time_str})"
                         
                         # 定義是否需要將此行計入通知
@@ -92,12 +99,12 @@ def check_once():
                         if is_initial:
                             should_add = True
                         else:
-                            if fleet_no not in last_buses:
+                            # 🎯 改動 4：改用 record_key 比對，只要這個車牌搭配此路線沒出現過，就通報
+                            if record_key not in last_records:
                                 should_add = True
                         
                         if should_add and formatted_output not in new_buses_to_notify:
                             new_buses_to_notify.append(formatted_output)
-                            # 🎯 如果這部新車是特見，就把標記設為 True
                             if is_special:
                                 has_bold_bus = True
         
@@ -105,7 +112,7 @@ def check_once():
         if new_buses_to_notify:
             current_matches_str = "\n".join(new_buses_to_notify)
             
-            # 🎯 核心判定：只有含有加粗特見才觸發 @everyone
+            # 🎯 精準排版：有特見觸發 @everyone，無特見則直接空行排版
             if has_bold_bus:
                 msg = f"@everyone\n\n{current_matches_str}"
             else:
@@ -113,9 +120,9 @@ def check_once():
                 
             send_discord_message(msg)
             
-        # 覆寫本地紀錄，供全天候下一分鐘比對
+        # 🎯 改動 5：改用換行符號將所有最新的組合寫入存檔
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            f.write(",".join(current_today_buses))
+            f.write("\n".join(current_today_records))
                 
     except Exception as e:
         print(f"單次檢查出錯: {e}")
