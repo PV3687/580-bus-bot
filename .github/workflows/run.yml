@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  執行監控腳本:
+  run-monitor: # 🎯 這裡改回合法的英文 ID 
+    name: 執行監控腳本 # 🎯 用 name 屬性就能在 GitHub 網頁上完美顯示繁體中文！
     runs-on: ubuntu-latest
     
     steps:
