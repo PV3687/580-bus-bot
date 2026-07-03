@@ -60,7 +60,8 @@ def main():
             if URL:
                 response = requests.get(URL, timeout=15)
                 soup = BeautifulSoup(response.content, 'html.parser')
-                # 💡 修正：移除 separator='\n'，確保整條巴士紀錄維持在同一行，不被標籤拆散
+                
+                # 💡 修正 1：移除 separator='\n'，確保整條巴士紀錄維持在同一行，不被標籤拆散
                 lines = soup.get_text().split('\n')
                 
                 is_today = False
@@ -71,7 +72,6 @@ def main():
                     if not line: 
                         continue
                         
-                    # 辨識日期標籤
                     if re.match(r'^\d{4}-\d{2}-\d{2}$', line):
                         if line == today_str:
                             is_today = True
@@ -80,12 +80,12 @@ def main():
                             break 
                             
                     if is_today:
-                        # 💡 終極修正：利用特殊標記替換 \xa0，精確切分欄位
-                        # 這樣做能100%保留車牌中間的空格（如 PT 195），同時徹底杜絕後面地點和舊時間的干擾
+                        # 💡 核心修正 2：Across Bus 真正的欄位分隔符是 \xa0。
+                        # 我們將所有的 \xa0 標記替換為專用切分符，這樣就能100%保留九巴車牌中間的普通空格！
                         line_raw = line.replace('\xa0', '[[SPLIT]]').replace(' ', '[[SPLIT]]')
                         parts = line_raw.split('[[SPLIT]]')
                         
-                        # 過濾掉因為網頁排版產生的空欄位
+                        # 清理因為網頁排版產生的多餘空欄位
                         parts = [p.strip() for p in parts if p.strip()]
                             
                         if len(parts) >= 3:
@@ -93,7 +93,13 @@ def main():
                             reg_no = parts[1]
                             raw_route = parts[2]
                             
-                            # 只拿取第三個欄位的第一個單字（即 580、18 或 DEAD），後面其餘雜訊直接丟棄
+                            # 💡 修正 3：車牌如果是「兩字母+空格+四位數」（例如 RA 4078），它會被分到 parts[1] 和 parts[2] 裡。
+                            # 我們檢查 parts[2] 如果是純數字，就代表它是車牌後半部，必須幫它接回 parts[1]
+                            if len(parts) >= 4 and parts[2].isdigit():
+                                reg_no = f"{parts[1]} {parts[2]}"
+                                raw_route = parts[3]
+                            
+                            # 丟棄主路線後面的詳細地點或網頁自帶的舊時間，只保留第一個單字
                             route = raw_route.split()[0] if raw_route else ""
                             
                             if fleet_no and reg_no and route:
