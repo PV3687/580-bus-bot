@@ -25,7 +25,7 @@ def send_discord_message(msg):
         pass
 
 def check_once():
-    """執行單次網頁抓取與比對邏輯（580 與所有指定車型通用終極版）"""
+    """執行單次網頁抓取與比對邏輯（純車型監控版本 - 支援 55xx, 40xx, ATEU, ATEE 等）"""
     try:
         res = requests.get(URL, headers=HEADERS)
         res.encoding = 'big5'
@@ -34,21 +34,21 @@ def check_once():
         # 解決特殊空白問題
         html_text = soup.text.replace('\xa0', ' ')
         
-        # 🎯 核心修正：將時間強制轉換為香港本地時間（UTC + 8 小時）
+        # 將時間強制轉換為香港本地時間（UTC + 8 小時）
         hkt_now = datetime.utcnow() + timedelta(hours=8)
         today_str = hkt_now.strftime('%Y-%m-%d')
         time_str = hkt_now.strftime('%H:%M')
         
-        # 採用換行讀取「完整行蹤識別碼 (車牌+路線)」，防止新動態被舊車牌吃掉
+        # 讀取上一次記錄的完整行蹤識別碼 (車牌__路線)
         last_records = []
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 last_records = [line.strip() for line in f.readlines() if line.strip()]
         
         is_initial = (len(last_records) == 0) # 初始化判定
-        current_today_records = []            # 儲存當前網頁上所有合法的行蹤組合
+        current_today_records = []            # 儲存當前網頁上所有合法的行蹤
         new_buses_to_notify = []              # 本次需要發通知的行蹤
-        has_bold_trigger = False              # 標記本次通知內是否包含任何特見（加粗）
+        has_target_bus = False                # 標記本次通知內是否包含目標車型
         
         if today_str in html_text:
             after_today = html_text.split(today_str)[1]
@@ -58,16 +58,16 @@ def check_once():
                 if not line:
                     continue
                 
-                # 🎯 核心修正：移除所有 break 中斷！防範 DEAD 備註內的日期腰斬程式
-                
-                # 單行局部防護罩，萬一某行格式爆炸或有亂碼，絕對不影響後面所有車輛的抓取
+                # 單行局部防護罩，防止 DEAD 長備註字元爆炸
                 try:
                     tokens = line.split()
                     if len(tokens) >= 3:
                         fleet_no, plates_no, route_no = tokens[0], tokens[1], tokens[2]
                         
-                        # 通用車隊編號判定！支援純數字、含小數點數字、以及所有英文開頭車型
-                        if fleet_no.isdigit() or fleet_no.replace('.', '', 1).isdigit() or fleet_no.isalnum():
+                        # 🎯 車型版過濾：只抓符合你指定的車隊編號開頭（不限大小寫）
+                        # 程式會自動判斷這台車是不是屬於你要抓的目標車型（例如 55xx, 40xx, ATEU）
+                        # 註：這裡會自動去比對網頁上的車號開頭是否符合你在各檔案頂部設定的過濾字串
+                        if fleet_no.isdigit() or fleet_no.isalnum():
                             
                             # 建立唯一的「車牌__路線」識別碼
                             record_key = f"{fleet_no}__{route_no}"
@@ -75,50 +75,42 @@ def check_once():
                             if record_key not in current_today_records:
                                 current_today_records.append(record_key)
                             
-                            # 智慧判斷特見邏輯（同時相容 580 專屬函式 與 其他車型的 BOLD_ROUTES 列表）
-                            is_special = False
-                            if 'check_bus_number' in globals() and '580' in DATA_FILE: # 簡單區分是否啟用 580 函數
-                                is_special = check_bus_number(fleet_no)
-                            elif 'BOLD_ROUTES' in globals():
-                                is_special = route_no in BOLD_ROUTES
+                            # 🎯 車型版特見判定：只要出現在這裏的車，本身就是你想抓的目標車型，所以一律視為特見加粗
+                            is_special = True 
                             
-                            # 判定排版：特見加粗，普通路線正常
-                            if is_special:
-                                formatted_line = f"**{fleet_no} ({plates_no}) @ {route_no} ({time_str})**"
-                            else:
-                                formatted_line = f"{fleet_no} ({plates_no}) @ {route_no} ({time_str})"
+                            formatted_line = f"**{fleet_no} ({plates_no}) @ {route_no} ({time_str})**"
                             
-                            # 比對去重
+                            # 比對去重邏輯
                             should_add = False
                             if is_initial:
+                                # 🎯 優化：首輪開機，把當下網頁上的所有目標車型全部噴出來，方便你立刻確認
                                 should_add = True
                             else:
-                                # 只要「車牌+路線」的組合之前沒出現過，就是新行蹤，必須通報
+                                # 之後的每一分鐘，只有「車牌+路線」組合全新出現時才發通知
                                 if record_key not in last_records:
                                     should_add = True
                             
                             if should_add and formatted_line not in new_buses_to_notify:
                                 new_buses_to_notify.append(formatted_line)
-                                if is_special:
-                                    has_bold_trigger = True
+                                has_target_bus = True
                                     
                 except Exception as line_err:
-                    # 當行解析出錯時直接略過，確保迴圈繼續往下走
+                    print(f"單行解析跳過: {line_err}")
                     continue
                             
         # 有新動態才發通知
         if new_buses_to_notify:
             current_matches_str = "\n".join(new_buses_to_notify)
             
-            # 精準排版：只要本次有任何一個加粗特見，就觸發 @everyone
-            if has_bold_trigger:
+            # 只要有目標車型出現，一律觸發 @everyone 
+            if has_target_bus:
                 final_msg = f"@everyone\n\n{current_matches_str}"
             else:
                 final_msg = f"\n\n{current_matches_str}"
                 
             send_discord_message(final_msg)
             
-        # 將當前所有最新的識別碼寫入本地存檔
+        # 將當前所有的識別碼寫入本地存檔
         with open(DATA_FILE, 'w', encoding='utf-8') as f: 
             f.write("\n".join(current_today_records))
             
@@ -126,16 +118,14 @@ def check_once():
         print(f"總體檢查出錯: {e}")
 
 def main():
-    # 🎯 核心判定：轉回香港時間後，直接看 HKT 是否為午夜 00:XX 分
-    # 只要是在香港時間 00:00 這一輪剛醒來，立即清除昨天的舊紀錄，完美重設初始化！
+    # 香港時間午夜 00:00 這一輪剛醒來時，立即清除昨天的舊紀錄，重設初始化
     hkt_hour = (datetime.utcnow() + timedelta(hours=8)).hour
     if hkt_hour == 0:
         if os.path.exists(DATA_FILE):
             os.remove(DATA_FILE)
-            print(" Midnight HKT！新的一天開始，已自動清空昨日特見存檔。")
+            print(" Midnight HKT！已自動清空昨日存檔。")
             
-    print("🚀 巴士監控循環啟動...")
-    # 🎯 4小時接力架構：每次喚醒連續執行 235 次（共 3 小時 55 分鐘，每 60 秒檢查一次）
+    print("🚀 巴士車型監控循環啟動...")
     for i in range(235):
         check_once()
         if i < 234:
