@@ -1,41 +1,51 @@
-name: 特定巴士行蹤監控
+# .github/workflows/bus_tracker.yml
+name: Across Bus Multi-Tracker
 
 on:
   schedule:
-    # 🎯 精準在香港時間 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 喚醒（每 4 小時一次）
-    - cron: '0 */4 * * *'
-  
-  # 🎯 保留手動觸發按鈕，方便你隨時在 GitHub 網頁上點擊「Run workflow」進行測試或重啟
-  workflow_dispatch:
+    # 這裡的 Cron 排程為 UTC 時間
+    # 對應香港時間 (UTC+8) 的 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
+    - cron: '0 0,4,8,12,16,20 * * *'
+  workflow_dispatch: # 支援在 GitHub 網頁介面上手動點擊「Run workflow」進行測試
 
 jobs:
-  run-monitor: 
-    name: 執行監控腳本
+  run-trackers:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write # 賦予 GitHub Actions 修改與寫入數據庫檔案（Push）的權限
+
     steps:
-      - name: 複製儲存庫檔案
-        uses: actions/checkout@v4
+      - name: 檢出儲存庫 (Checkout Repository)
+        uses: actions/checkout@v3
 
       - name: 設定 Python 環境
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
-      - name: 安裝必要套件
-        run: |
-          pip install requests beautifulsoup4
+      - name: 安裝所需套件 (Dependencies)
+        run: pip install requests beautifulsoup4
 
-      - name: 同時啟動所有巴士監控程式
-        # 🎯 讓所有程式在背景獨立執行 3 小時 55 分鐘。請確認檔名與你儲存庫中的檔案完全一致：
+      - name: 執行所有追蹤程式
         run: |
-          python nwfb_55xx.py &
-          python nwfb_40xx.py &
-          python ctb_81xx.py &
-          python kmb_ateu.py &
-          python kmb_atee.py &
-          python lwb_84xx.py &
-          python mtr_8xx_12.py &
-          python mtr_8xx_11_3.py &
-          python ctb_580.py &
+          # 使用「python track_*.py」會自動執行所有符合檔名開頭的 Python 檔案
+          # 加上「&」讓所有程式同時在背景獨立並行運作，達到每分鐘同步抓取的效果
+          for file in track_*.py; do
+            if [ -f "$file" ]; then
+              echo "正在啟動背景執行: $file"
+              python "$file" &
+            fi
+          done
+          
+          # wait 指令會卡住這個步驟，直到所有在背景執行的 Python 程式正常結束（即 3 小時 55 分鐘後）
           wait
+
+      - name: 自動保存所有專屬數據庫 (Save All Tracked Databases)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 使用 *.json 完美動態支援所有自訂名稱的數據庫，不會漏掉任何一條路線
+          git add *.json || echo "暫時沒有任何數據庫檔案，忽略"
+          git commit -m "Auto-update bus tracking databases [Skip CI]" || echo "今日數據沒有變更"
+          git push
