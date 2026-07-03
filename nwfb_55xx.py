@@ -67,53 +67,46 @@ def main():
                 response = requests.get(URL, timeout=15)
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
-                # 💡 終極修正 1：利用 \xa0 完美把整個網頁的所有欄位一次過切開，不再依賴 \n 換行！
-                full_text = soup.get_text()
-                full_text_marked = full_text.replace('\xa0', '|||').replace(' ', '|||')
-                tokens = full_text_marked.split('|||')
-                
-                # 過濾並清理所有空白的標籤物件
-                tokens = [t.strip() for t in tokens if t.strip()]
+                lines = soup.get_text().split('\n')
                 
                 is_today = False
                 new_buses = []
                 
-                # 💡 終極修正 2：用迴圈線性掃描所有切開的欄位
-                i = 0
-                while i < len(tokens):
-                    token = tokens[i]
-                    
-                    # 檢查是否讀到了日期標籤
-                    if re.match(r'^\d{4}-\d{2}-\d{2}$', token):
-                        if token == today_str:
+                for line in lines:
+                    line = line.strip()
+                    if not line: 
+                        continue
+                        
+                    if re.match(r'^\d{4}-\d{2}-\d{2}$', line):
+                        if line == today_str:
                             is_today = True
-                            i += 1
                             continue
                         elif is_today:
-                            # 讀到昨天的日期，代表今天的部分已全部讀完，立刻安全跳出
                             break 
-                    
-                    # 💡 終極修正 3：在今天的區域內，每三樣東西就是一輛巴士的完整記錄（車隊、車牌、路線與狀態）
+                            
                     if is_today:
-                        if i + 2 < len(tokens):
-                            fleet_no = tokens[i]
-                            reg_no = tokens[i+1]
-                            raw_route = tokens[i+2]
+                        line_raw = line.replace('\xa0', '|').replace(' ', '|')
+                        parts = line_raw.split('|')
+                        parts = [p.strip() for p in parts if p.strip()]
+                        
+                        cleaned_parts = []
+                        for p in parts:
+                            if '(' in p:
+                                before_paren = p.split('(')[0].strip()
+                                if before_paren:
+                                    cleaned_parts.append(before_paren)
+                                break
+                            cleaned_parts.append(p)
                             
-                            # 防錯機制：如果因為格式錯位導致拿到另一個日期，就交給外層迴圈去處理日期
-                            if re.match(r'^\d{4}-\d{2}-\d{2}$', fleet_no):
-                                continue
+                        if len(cleaned_parts) >= 3:
+                            fleet_no = cleaned_parts[0]
+                            reg_no = cleaned_parts[1]
+                            route = cleaned_parts[2]
+                            
+                            if len(cleaned_parts) >= 4 and cleaned_parts[2].isdigit():
+                                reg_no = f"{cleaned_parts[1]} {cleaned_parts[2]}"
+                                route = cleaned_parts[3]
                                 
-                            # 💡 完美防錯：如果車牌中間帶有空格（如數字只有3個位），parts[i+2] 剛好會是純數字（例如 221）
-                            # 我們自動判定並將其組裝回完整車牌，並把下一個位置的資料當成真正的路線
-                            if raw_route.isdigit() and i + 3 < len(tokens):
-                                reg_no = f"{tokens[i+1]} {tokens[i+2]}"
-                                raw_route = tokens[i+3]
-                                i += 1 # 指標向後修正
-                            
-                            # 丟棄主路線後面的詳細地點與網頁自帶的舊時間，只留第一個單字
-                            route = raw_route.split()[0] if raw_route else ""
-                            
                             if fleet_no and reg_no and route:
                                 entry = (fleet_no, reg_no, route)
                                 if entry not in seen_entries:
