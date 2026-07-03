@@ -1,0 +1,40 @@
+name: 每日巴士特見 24H 全天候監控
+
+on:
+  schedule:
+    # 🎯 每天香港時間 00:00 (即 UTC 16:00) 自動喚醒執行一整天
+    - cron: '0 16 * * *'
+  
+  # 🎯 保留手動觸發按鈕，方便你隨時在 GitHub 網頁上點擊「Run workflow」進行測試或重啟
+  workflow_dispatch:
+
+jobs:
+  執行監控腳本:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 複製儲存庫檔案
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 安裝必要套件
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: 同時啟動所有巴士監控程式
+        # 🎯 讓所有程式在背景獨立執行 24 小時，請確認檔名與你儲存庫中的檔案一致：
+        run: |
+          python nwfb_55xx.py &
+          python nwfb_40xx.py &
+          python ctb_81xx.py &
+          python kmb_ateu.py &
+          python kmb_atee.py &
+          python lwb_84xx.py &
+          python mtr_8xx_12.py &
+          python mtr_8xx_11_3.py &
+          python 580_monitor.py &
+          wait
