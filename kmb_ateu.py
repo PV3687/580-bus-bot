@@ -31,15 +31,15 @@ def check_once():
         today_str = datetime.today().strftime('%Y-%m-%d')
         time_str = datetime.now().strftime('%H:%M')
         
-        # 讀取這 24 小時生命週期內上一次記錄的車隊清單
-        last_buses = []
+        # 讀取上一次記錄的完整行蹤字串清單
+        last_records = []
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                last_buses = [b.strip() for b in f.read().split(',') if b.strip()]
+                last_records = [line.strip() for line in f.readlines() if line.strip()]
         
-        is_initial = (len(last_buses) == 0) # 00:00 剛啟動時為空，視為初始化
-        current_today_buses = []            # 當前網頁上所有出現的車隊
-        new_buses_to_notify = []            # 存放本次需要發通知的行蹤
+        is_initial = (len(last_records) == 0) # 初始化判定
+        current_today_records = []            # 儲存當前網頁上所有合法的行蹤
+        new_buses_to_notify = []            # 本次需要發通知的行蹤
         has_bold_route = False              # 標記本次通知內是否包含特見路線
         
         if today_str in html_text:
@@ -50,6 +50,8 @@ def check_once():
                 if not line: 
                     continue
                 
+                # 🎯 修正核心：只有當「這整行完全只有日期」時才視為昨天的分隔線！
+                # 如果這一行很長（例如包含了車牌、備註、時間戳），絕對不觸發中斷！
                 if len(line) == 10 and line.count('-') == 2 and line != today_str:
                     break
                 
@@ -57,9 +59,14 @@ def check_once():
                 if len(tokens) >= 3:
                     fleet_no, plates_no, route_no = tokens[0], tokens[1], tokens[2]
                     
-                    if fleet_no.startswith("ATE"):
-                        if fleet_no not in current_today_buses:
-                            current_today_buses.append(fleet_no)
+                    # 放寬判定，兼容數字、ATE/ATEU/PU/PV等所有格式及 5/6 位數新車隊編號
+                    if fleet_no.isdigit() or fleet_no.isalnum():
+                        
+                        # 建立唯一的「車牌_路線」識別碼
+                        record_key = f"{fleet_no}__{route_no}"
+                        
+                        if record_key not in current_today_records:
+                            current_today_records.append(record_key)
                         
                         is_special = route_no in BOLD_ROUTES
                         
@@ -69,12 +76,12 @@ def check_once():
                         else:
                             formatted_line = f"{fleet_no} ({plates_no}) @ {route_no} ({time_str})"
                         
-                        # 定義是否需要將此行計入通知
+                        # 判定是否需要將此行計入通知
                         should_add = False
                         if is_initial:
                             should_add = True
                         else:
-                            if fleet_no not in last_buses:
+                            if record_key not in last_records:
                                 should_add = True
                         
                         if should_add and formatted_line not in new_buses_to_notify:
@@ -86,7 +93,6 @@ def check_once():
         if new_buses_to_notify:
             current_matches_str = "\n".join(new_buses_to_notify)
             
-            # 🎯 核心判定：只有含有加粗特見才觸發 @everyone，其餘直接空行排版
             if has_bold_route:
                 final_msg = f"@everyone\n\n{current_matches_str}"
             else:
@@ -94,9 +100,9 @@ def check_once():
                 
             send_discord_message(final_msg)
             
-        # 覆寫本地紀錄，供全天候下一分鐘比對
+        # 將當前所有的識別碼存檔，供下一分鐘比對
         with open(DATA_FILE, 'w', encoding='utf-8') as f: 
-            f.write(",".join(current_today_buses))
+            f.write("\n".join(current_today_records))
     except: 
         pass
 
