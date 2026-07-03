@@ -120,53 +120,63 @@ def main():
                 response = requests.get(URL, timeout=15)
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
-                # 💡 修正 1：移除 separator='\n'，確保整條巴士紀錄維持在同一行，不被標籤拆散
-                lines = soup.get_text().split('\n')
+                # 💡 終極修正 1：利用 \xa0 完美把整個網頁的所有欄位一次過切開，不再依賴 \n 換行！
+                full_text = soup.get_text()
+                full_text_marked = full_text.replace('\xa0', '|||').replace(' ', '|||')
+                tokens = full_text_marked.split('|||')
+                
+                # 過濾並清理所有空白的標籤物件
+                tokens = [t.strip() for t in tokens if t.strip()]
                 
                 is_today = False
                 new_buses = []
                 
-                for line in lines:
-                    line = line.strip()
-                    if not line: 
-                        continue
-                        
-                    if re.match(r'^\d{4}-\d{2}-\d{2}$', line):
-                        if line == today_str:
+                # 💡 終極修正 2：用迴圈線性掃描所有切開的欄位
+                i = 0
+                while i < len(tokens):
+                    token = tokens[i]
+                    
+                    # 檢查是否讀到了日期標籤
+                    if re.match(r'^\d{4}-\d{2}-\d{2}$', token):
+                        if token == today_str:
                             is_today = True
+                            i += 1
                             continue
                         elif is_today:
+                            # 讀到昨天的日期，代表今天的部分已全部讀完，立刻安全跳出
                             break 
-                            
+                    
+                    # 💡 終極修正 3：在今天的區域內，每三樣東西就是一輛巴士的完整記錄（車隊、車牌、路線與狀態）
                     if is_today:
-                        # 💡 核心修正 2：Across Bus 真正的欄位分隔符是 \xa0。
-                        # 我們將所有的 \xa0 標記替換為專用切分符，這樣就能100%保留九巴車牌中間的普通空格！
-                        line_raw = line.replace('\xa0', '[[SPLIT]]').replace(' ', '[[SPLIT]]')
-                        parts = line_raw.split('[[SPLIT]]')
-                        
-                        # 清理因為網頁排版產生的多餘空欄位
-                        parts = [p.strip() for p in parts if p.strip()]
+                        if i + 2 < len(tokens):
+                            fleet_no = tokens[i]
+                            reg_no = tokens[i+1]
+                            raw_route = tokens[i+2]
                             
-                        if len(parts) >= 3:
-                            fleet_no = parts[0]
-                            reg_no = parts[1]
-                            raw_route = parts[2]
+                            # 防錯機制：如果因為格式錯位導致拿到另一個日期，就交給外層迴圈去處理日期
+                            if re.match(r'^\d{4}-\d{2}-\d{2}$', fleet_no):
+                                continue
+                                
+                            # 💡 完美防錯：如果車牌中間帶有空格（如數字只有3個位），parts[i+2] 剛好會是純數字（例如 221）
+                            # 我們自動判定並將其組裝回完整車牌，並把下一個位置的資料當成真正的路線
+                            if raw_route.isdigit() and i + 3 < len(tokens):
+                                reg_no = f"{tokens[i+1]} {tokens[i+2]}"
+                                raw_route = tokens[i+3]
+                                i += 1 # 指標向後修正
                             
-                            # 💡 修正 3：車牌如果是「兩字母+空格+四位數」（例如 RA 4078），它會被分到 parts[1] 和 parts[2] 裡。
-                            # 我們檢查 parts[2] 如果是純數字，就代表它是車牌後半部，必須幫它接回 parts[1]
-                            if len(parts) >= 4 and parts[2].isdigit():
-                                reg_no = f"{parts[1]} {parts[2]}"
-                                raw_route = parts[3]
-                            
-                            # 丟棄主路線後面的詳細地點或網頁自帶的舊時間，只保留第一個單字
+                            # 丟棄主路線後面的詳細地點與網頁自帶的舊時間，只留第一個單字
                             route = raw_route.split()[0] if raw_route else ""
                             
                             if fleet_no and reg_no and route:
                                 entry = (fleet_no, reg_no, route)
-                                
                                 if entry not in seen_entries:
                                     seen_entries.add(entry)
                                     new_buses.append(entry)
+                            
+                            i += 3 # 成功讀取一輛巴士的欄位，跳至下一筆
+                            continue
+                    
+                    i += 1
                 
                 # 若發現新行蹤，則發送至 Discord
                 if new_buses:
