@@ -141,20 +141,16 @@ def main():
                             break 
                             
                     if is_today:
-                        # 分割車隊編號、車牌與路線
-                        parts = re.split(r'\s+', line, maxsplit=2)
-                            
-                        if len(parts) >= 3:
-                            fleet_no = parts[0].strip()
-                            reg_no = parts[1].strip()
-                            route_info = parts[2].strip()
-                            
-                            # 僅擷取主路線編號（忽略後面括號的詳細地點時間等數據）
-                            route = route_info.split()[0] if route_info else ""
+                        # 💡 修改這裡：用最嚴格的正則表達式，只拿最前面兩個單字（車隊、車牌），以及第三個單字（路線主編號）
+                        match = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)', line)
+        
+                        if match:
+                            fleet_no = match.group(1).strip()
+                            reg_no = match.group(2).strip()
+                            route = match.group(3).strip() # 💡 這裡會被強行限制只拿第一個單字（例如 18 或 DEAD），後面網頁自帶的舊時間地點通通會被丟棄
                             
                             entry = (fleet_no, reg_no, route)
                             
-                            # 比對是否為新出現的行蹤
                             if entry not in seen_entries:
                                 seen_entries.add(entry)
                                 new_buses.append(entry)
