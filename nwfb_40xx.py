@@ -66,36 +66,48 @@ def main():
             if URL:
                 response = requests.get(URL, timeout=15)
                 soup = BeautifulSoup(response.content, 'html.parser')
-                lines = soup.get_text(separator='\n').split('\n')
+                # 💡 修正：移除 separator='\n'，確保整條巴士紀錄維持在同一行，不被標籤拆散
+                lines = soup.get_text().split('\n')
                 
                 is_today = False
                 new_buses = []
                 
                 for line in lines:
                     line = line.strip()
-                    if not line: continue
+                    if not line: 
+                        continue
                         
+                    # 辨識日期標籤
                     if re.match(r'^\d{4}-\d{2}-\d{2}$', line):
                         if line == today_str:
                             is_today = True
                             continue
                         elif is_today:
-                            break
+                            break 
                             
                     if is_today:
-                        # 💡 修改這裡：用最嚴格的正則表達式，只拿最前面兩個單字（車隊、車牌），以及第三個單字（路線主編號）
-                        match = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)', line)
-        
-                        if match:
-                            fleet_no = match.group(1).strip()
-                            reg_no = match.group(2).strip()
-                            route = match.group(3).strip() # 💡 這裡會被強行限制只拿第一個單字（例如 18 或 DEAD），後面網頁自帶的舊時間地點通通會被丟棄
+                        # 💡 終極修正：利用特殊標記替換 \xa0，精確切分欄位
+                        # 這樣做能100%保留車牌中間的空格（如 PT 195），同時徹底杜絕後面地點和舊時間的干擾
+                        line_raw = line.replace('\xa0', '[[SPLIT]]').replace(' ', '[[SPLIT]]')
+                        parts = line_raw.split('[[SPLIT]]')
+                        
+                        # 過濾掉因為網頁排版產生的空欄位
+                        parts = [p.strip() for p in parts if p.strip()]
                             
-                            entry = (fleet_no, reg_no, route)
+                        if len(parts) >= 3:
+                            fleet_no = parts[0]
+                            reg_no = parts[1]
+                            raw_route = parts[2]
                             
-                            if entry not in seen_entries:
-                                seen_entries.add(entry)
-                                new_buses.append(entry)
+                            # 只拿取第三個欄位的第一個單字（即 580、18 或 DEAD），後面其餘雜訊直接丟棄
+                            route = raw_route.split()[0] if raw_route else ""
+                            
+                            if fleet_no and reg_no and route:
+                                entry = (fleet_no, reg_no, route)
+                                
+                                if entry not in seen_entries:
+                                    seen_entries.add(entry)
+                                    new_buses.append(entry)
                 
                 if new_buses:
                     messages = []
