@@ -37,5 +37,5 @@ jobs:
           python lwb_84xx.py &
           python mtr_8xx_12.py &
           python mtr_8xx_11_3.py &
-          python 580_monitor.py &
+          python ctb_580.py &
           wait
