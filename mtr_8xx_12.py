@@ -92,7 +92,7 @@ def main():
                                 seen_entries.add(entry)
                                 new_buses.append(entry)
                 
-                if new_buses and not is_first_run:
+                if new_buses:
                     messages = []
                     has_trigger = False
                     time_str = now.strftime("%H:%M")

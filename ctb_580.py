@@ -159,8 +159,8 @@ def main():
                                 seen_entries.add(entry)
                                 new_buses.append(entry)
                 
-                # 若發現新行蹤，且非首次啟動程式（避免首次啟動時全量轟炸），則發送至 Discord
-                if new_buses and not is_first_run:
+                # 若發現新行蹤，則發送至 Discord
+                if new_buses:
                     messages = []
                     has_trigger = False
                     time_str = now.strftime("%H:%M")
