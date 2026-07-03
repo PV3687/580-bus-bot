@@ -121,16 +121,20 @@ def check_once():
         print(f"單次檢查出錯: {e}")
 
 def main():
-    # 每天 00:00 重新喚醒時，自動移除昨天的殘留檔案，重設初始化
-    if os.path.exists(DATA_FILE):
-        os.remove(DATA_FILE)
-        
-    print("🚀 巴士路線 24H 全天候監控啟動...")
-    # 連續執行 1440 次（24 小時，每 60 秒檢查一次）
-    for i in range(1440):
-        print(f"⏱️ 正在執行第 {i+1}/1440 次檢查...")
+    # 🎯 核心判定：如果是在香港時間 00:00（即 UTC 16:00）這一輪剛醒來
+    # 立即清除昨天的舊紀錄，確保新的一天開始時會執行「初始化全出」
+    current_utc_hour = datetime.utcnow().hour
+    if current_utc_hour == 16:
+        if os.path.exists(DATA_FILE):
+            os.remove(DATA_FILE)
+            print(" Midnight！新的一天開始，已自動清空昨日特見存檔。")
+            
+    print("🚀 巴士監控循環啟動...")
+    # 🎯 每次喚醒連續執行 235 次（共 3 小時 55 分鐘，每 60 秒檢查一次）
+    # 提早 5 分鐘正常關機，留給系統收尾，等下一個 4 小時準時被定時任務喚醒
+    for i in range(235):
         check_once()
-        if i < 1439:
+        if i < 234:
             time.sleep(60)
 
 if __name__ == "__main__":
