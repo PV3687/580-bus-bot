@@ -118,8 +118,10 @@ def main():
         try:
             if URL:
                 response = requests.get(URL, timeout=15)
-                soup = BeautifulSoup(response.content, 'html.parser')
                 
+                # 強制將網頁行結束標籤換成真正的換行符，徹底解決完全沒有反應的問題
+                html_text = response.text.replace('</tr>', '\n').replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
+                soup = BeautifulSoup(html_text, 'html.parser')
                 lines = soup.get_text().split('\n')
                 
                 is_today = False
@@ -165,13 +167,7 @@ def main():
                                 if entry not in seen_entries:
                                     seen_entries.add(entry)
                                     new_buses.append(entry)
-                            
-                            i += 3 # 成功讀取一輛巴士的欄位，跳至下一筆
-                            continue
-                    
-                    i += 1
                 
-                # 若發現新行蹤，則發送至 Discord
                 if new_buses:
                     messages = []
                     has_trigger = False
@@ -195,7 +191,6 @@ def main():
                 
                 is_first_run = False
                 
-                # 儲存目前的數據庫狀態
                 with open(DB_FILE, 'w', encoding='utf-8') as f:
                     json.dump({"date": today_str, "entries": list(seen_entries)}, f, ensure_ascii=False)
                     
