@@ -26,18 +26,22 @@ jobs:
       - name: 安裝所需套件 (Dependencies)
         run: pip install requests beautifulsoup4
 
-      - name: 執行所有追蹤程式
+      - name: 執行指定的所有巴士追蹤程式
         run: |
-          # 使用「python track_*.py」會自動執行所有符合檔名開頭的 Python 檔案
-          # 加上「&」讓所有程式同時在背景獨立並行運作，達到每分鐘同步抓取的效果
-          for file in track_*.py; do
-            if [ -f "$file" ]; then
-              echo "正在啟動背景執行: $file"
-              python "$file" &
-            fi
-          done
+          # 明確指定執行 9 個 Python 檔案
+          # 末尾加上「&」使其在背景同時並行運作，每分鐘獨立更新行蹤
           
-          # wait 指令會卡住這個步驟，直到所有在背景執行的 Python 程式正常結束（即 3 小時 55 分鐘後）
+          if [ -f "ctb_580.py" ]; then python ctb_580.py & fi
+          if [ -f "ctb_81xx.py" ]; then python ctb_81xx.py & fi
+          if [ -f "kmb_atee.py" ]; then python kmb_atee.py & fi
+          if [ -f "kmb_ateu.py" ]; then python kmb_ateu.py & fi
+          if [ -f "lwb_84xx.py" ]; then python lwb_84xx.py & fi
+          if [ -f "mtr_8xx_11_3.py" ]; then python mtr_8xx_11_3.py & fi
+          if [ -f "mtr_8xx_12.py" ]; then python mtr_8xx_12.py & fi
+          if [ -f "nwfb_40xx.py" ]; then python nwfb_40xx.py & fi
+          if [ -f "nwfb_55xx.py" ]; then python nwfb_55xx.py & fi
+          
+          # wait 指令會在這裡卡住，直到上方所有背景執行的 Python 程式結束（即 3 小時 55 分鐘後）
           wait
 
       - name: 自動保存所有專屬數據庫 (Save All Tracked Databases)
@@ -45,7 +49,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 使用 *.json 完美動態支援所有自訂名稱的數據庫，不會漏掉任何一條路線
+          # 這裡同樣將 git add 明確指定為這 9 個檔案所對應產生的 JSON 數據庫
+          # 格式為 db_route_[檔案名].json 或 db_fleet_[檔案名].json （依你 Python 內的命名而定）
+          # 為防萬一，這裡依舊採用 *.json 保障所有生成的數據庫都能打包成功且不衝突
           git add *.json || echo "暫時沒有任何數據庫檔案，忽略"
           git commit -m "Auto-update bus tracking databases [Skip CI]" || echo "今日數據沒有變更"
           git push
