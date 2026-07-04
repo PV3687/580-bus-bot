@@ -2,11 +2,17 @@
 name: Across Bus Multi-Tracker
 
 on:
-  schedule:
-    # 這裡的 Cron 排程為 UTC 時間
-    # 對應香港時間 (UTC+8) 的 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
-    - cron: '0 0,4,8,12,16,20 * * *'
-  workflow_dispatch: # 支援在 GitHub 網頁介面上手動點擊「Run workflow」進行測試
+  # 1. 接受外部 cron-job.org API 準時觸發
+  repository_dispatch:
+    types: [trigger-from-cronjob]
+    
+  # 2. 依舊保留網頁手動觸發，方便你隨時測試
+  workflow_dispatch: 
+
+# 3. 強制防撞排隊機制：確保同一時間只有一個循環在跑，上一個沒跑完，下一個會乖乖排隊
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   run-trackers:
