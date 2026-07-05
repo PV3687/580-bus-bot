@@ -12,7 +12,7 @@ HKT = timezone(timedelta(hours=8))
 
 # ================= 用家設定區 =================
 URL = "https://1005.idv.hk/index.php?page=22&p=323"  # 請在此貼上 Across Bus 該車型的專屬網址
-WEBHOOK_URL = "https://discord.com/api/webhooks/1522477172168720395/P3z6ctjZcRPGeKiy_wFrqCEHo95l3l2hQaXZJJHTpJJqV3GqDb0ODNaqs7KErT_oUB-v"  # 請在此貼上 Discord Webhook 網址
+WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_MTR_8XX_11_3")  # 請在此貼上 Discord Webhook 網址
 
 # 條件觸發設定
 TARGET_ROUTES = []  # 路線編號的條件觸發空位，例如 ["980A", "796X"]，可為空 []

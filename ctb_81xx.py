@@ -12,7 +12,7 @@ HKT = timezone(timedelta(hours=8))
 
 # ================= 用家設定區 =================
 URL = "https://1005.idv.hk/index.php?page=22&p=277"  # 請在此貼上 Across Bus 該車型的專屬網址
-WEBHOOK_URL = "https://discord.com/api/webhooks/1522473956584587406/uLV9vNIKJcLHbuVbUgJuJ7KmullwDyvU07QoxoVJriyX-mzOUf6qvNolJ67jgai96bb9"  # 請在此貼上 Discord Webhook 網址
+WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_CTB_81XX")  # 請在此貼上 Discord Webhook 網址
 
 # 條件觸發設定
 TARGET_ROUTES = ["3A", "5X", "6", "6A", "7", "8H", "20", "20A", "22", "22D", "22M", "22X", "50", "50M", "50R", "55", "56", "56A", "63", "66", "71", "73", "73X", "76", "78P", "79P", "81", "98", 
