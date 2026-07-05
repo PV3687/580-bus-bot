@@ -33,6 +33,16 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: 執行指定的所有巴士追蹤程式
+        env:
+          DISCORD_WEBHOOK_NWFB_55XX: ${{ secrets.DISCORD_WEBHOOK_NWFB_55XX }}
+          DISCORD_WEBHOOK_NWFB_40XX: ${{ secrets.DISCORD_WEBHOOK_NWFB_40XX }}
+          DISCORD_WEBHOOK_CTB_81XX: ${{ secrets.DISCORD_WEBHOOK_CTB_81XX }}
+          DISCORD_WEBHOOK_KMB_ATEU: ${{ secrets.DISCORD_WEBHOOK_KMB_ATEU }}
+          DISCORD_WEBHOOK_KMB_ATEE: ${{ secrets.DISCORD_WEBHOOK_KMB_ATEE }}
+          DISCORD_WEBHOOK_LWB_84XX: ${{ secrets.DISCORD_WEBHOOK_LWB_84XX }}
+          DISCORD_WEBHOOK_MTR_8XX_12: ${{ secrets.DISCORD_WEBHOOK_MTR_8XX_12 }}
+          DISCORD_WEBHOOK_MTR_8XX_11_3: ${{ secrets.DISCORD_WEBHOOK_MTR_8XX_11_3 }}
+          DISCORD_WEBHOOK_CTB_580: ${{ secrets.DISCORD_WEBHOOK_CTB_580 }}
         run: |
           # 明確指定執行 9 個 Python 檔案
           # 末尾加上「&」使其在背景同時並行運作，每分鐘獨立更新行蹤
