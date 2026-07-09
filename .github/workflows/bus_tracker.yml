@@ -65,9 +65,14 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 這裡同樣將 git add 明確指定為這 9 個檔案所對應產生的 JSON 數據庫
-          # 格式為 db_route_[檔案名].json 或 db_fleet_[檔案名].json （依你 Python 內的命名而定）
-          # 為防萬一，這裡依舊採用 *.json 保障所有生成的數據庫都能打包成功且不衝突
+          # 1. 把所有 JSON 檔案加入暫存區
           git add *.json || echo "暫時沒有任何數據庫檔案，忽略"
+          
+          # 2. 提交變更，如果沒有變更就跳過
           git commit -m "Auto-update bus tracking databases [Skip CI]" || echo "今日數據沒有變更"
-          git push
+          
+          # 3. 【關鍵修正】先拉取最新變更，使用 rebase 模式避免產生額外的合併 commit
+          git pull --rebase origin main || git pull --rebase origin master
+          
+          # 4. 再次嘗試推回 GitHub
+          git push origin HEAD
