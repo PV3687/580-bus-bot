@@ -9,7 +9,7 @@ on:
   # 2. 依舊保留網頁手動觸發，方便你隨時測試
   workflow_dispatch: 
 
-# 3. 強制防撞排隊機制：確保同一時間只有一個循環在跑，上一個沒跑完，下一個會乖乖排隊
+# 3. 強制防撞排隊機制：確保同一時間處理一個循環，上一個沒跑完，下一個會排隊
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -22,7 +22,10 @@ jobs:
 
     steps:
       - name: 檢出儲存庫 (Checkout Repository)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0 # 抓取完整歷史，確保 rebase/push 順利
 
       - name: 設定 Python 環境
         uses: actions/setup-python@v4
@@ -65,14 +68,14 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 1. 把所有 JSON 檔案加入暫存區
+          # 1. 將所有 JSON 數據庫加入暫存
           git add *.json || echo "暫時沒有任何數據庫檔案，忽略"
           
-          # 2. 提交變更，如果沒有變更就跳過
+          # 2. 提交變更，若無變更則跳過
           git commit -m "Auto-update bus tracking databases [Skip CI]" || echo "今日數據沒有變更"
           
-          # 3. 【關鍵修正】先拉取最新變更，使用 rebase 模式避免產生額外的合併 commit
-          git pull --rebase origin main || git pull --rebase origin master
+          # 3. 先拉取雲端最新變更，若有衝突自動以本地最新產生的 JSON 覆蓋（-X theirs）
+          git pull --rebase -X theirs origin main || git pull --rebase -X theirs origin master || true
           
-          # 4. 再次嘗試推回 GitHub
+          # 4. 安全推回 GitHub
           git push origin HEAD
